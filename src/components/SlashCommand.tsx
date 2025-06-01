@@ -2,7 +2,14 @@ import { Extension } from "@tiptap/core";
 import { ReactRenderer } from "@tiptap/react";
 import Suggestion from "@tiptap/suggestion";
 import { CommandList } from "./CommandList";
-import { useEffect, useState } from "react";
+import tippy, { Instance } from "tippy.js"; // Recommended for popups
+
+interface CommandItem {
+  title: string;
+  description: string;
+  icon: string;
+  command: (props: { editor: any; range: any }) => void;
+}
 
 const commands = [
   {
@@ -56,7 +63,15 @@ export const SlashCommand = Extension.create({
     return {
       suggestion: {
         char: "/",
-        command: ({ editor, range, props }: any) => {
+        command: ({
+          editor,
+          range,
+          props,
+        }: {
+          editor: any;
+          range: any;
+          props: any;
+        }) => {
           props.command({ editor, range });
         },
       },
@@ -68,54 +83,66 @@ export const SlashCommand = Extension.create({
       Suggestion({
         editor: this.editor,
         ...this.options.suggestion,
-        items: ({ query }: any) => {
-          return commands.filter((item) =>
-            item.title.toLowerCase().includes(query.toLowerCase())
-          );
+        items: ({ query }: { query: string }) => {
+          return query
+            ? commands.filter((item) =>
+                item.title.toLowerCase().includes(query.toLowerCase())
+              )
+            : commands;
         },
         render: () => {
-          let component: ReactRenderer<any>;
-          let popup: any;
+          let component: ReactRenderer;
+          let popup: Instance;
 
           return {
             onStart: (props: any) => {
               component = new ReactRenderer(CommandList, {
-                props,
+                props: {
+                  ...props,
+                  items: commands, // Pass all commands initially
+                },
                 editor: props.editor,
               });
 
-              popup = document.createElement("div");
-              popup.className = "command-list";
-              popup.appendChild(component.element);
-              document.body.appendChild(popup);
-
-              updatePopup(props);
+              // Using tippy.js for better popup handling
+              popup = tippy("body", {
+                getReferenceClientRect: props.clientRect,
+                appendTo: () => document.body,
+                content: component.element,
+                showOnCreate: true,
+                interactive: true,
+                trigger: "manual",
+                placement: "bottom-start",
+              })[0];
             },
+
             onUpdate: (props: any) => {
-              updatePopup(props);
-
               component.updateProps(props);
+
+              popup?.setProps({
+                getReferenceClientRect: props.clientRect,
+              });
             },
+
             onKeyDown: (props: any) => {
               if (props.event.key === "Escape") {
-                popup?.remove?.();
+                popup?.hide();
                 return true;
               }
 
-              return component.ref?.onKeyDown(props);
+              // Handle arrow keys and enter
+              if (["ArrowUp", "ArrowDown", "Enter"].includes(props.event.key)) {
+                return component.ref?.onKeyDown(props);
+              }
+
+              return false;
             },
+
             onExit: () => {
-              popup?.remove?.();
+              popup?.destroy();
               component.destroy();
             },
           };
-
-          function updatePopup(props: any) {
-            const { from, to } = props.clientRect();
-            popup.style.position = "absolute";
-            popup.style.left = `${from.left}px`;
-            popup.style.top = `${to.bottom + window.scrollY}px`;
-          }
         },
       }),
     ];
