@@ -9,6 +9,7 @@ interface CommandItem {
   description: string;
   icon: string;
   command: (props: { editor: any; range: any }) => void;
+  onKeyDown: (props: { event: KeyboardEvent }) => boolean;
 }
 
 const commands = [
@@ -124,20 +125,25 @@ export const SlashCommand = Extension.create({
               });
             },
 
-            onKeyDown: (props: any) => {
+            onKeyDown: (props: { event: KeyboardEvent }) => {
               if (props.event.key === "Escape") {
                 popup?.hide();
-                return true;
+                return true; // Indicates the event was handled
               }
 
-              // Handle arrow keys and enter
+              // Type-safe access to the component's ref
+              const commandListRef = component.ref as
+                | { onKeyDown?: (props: { event: KeyboardEvent }) => boolean }
+                | undefined;
+
+              // Handle navigation keys only if CommandList is ready
               if (["ArrowUp", "ArrowDown", "Enter"].includes(props.event.key)) {
-                return component.ref?.onKeyDown(props);
+                return commandListRef?.onKeyDown?.(props) ?? false;
               }
 
-              return false;
+              return false; // Event not handled
             },
-
+            
             onExit: () => {
               popup?.destroy();
               component.destroy();
